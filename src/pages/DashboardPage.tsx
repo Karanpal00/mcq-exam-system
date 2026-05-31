@@ -80,11 +80,7 @@ export default function DashboardPage() {
         {tests.length === 0 ? (
           <div className="empty-state">
             <FileText size={48} />
-            <h3>No tests yet</h3>
-            <p className="text-sm text-muted">Create your first test to get started</p>
-            <button className="btn btn-primary mt-2" onClick={() => navigate('/tests/create')}>
-              <Plus size={16} /> Create Test
-            </button>
+            <h3>No tests yet</h3>  
           </div>
         ) : (
           <div className="table-wrap">
