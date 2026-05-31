@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Test, Question, Attempt, Bookmark, AppSettings } from '../types';
+import type { Test, Question, Attempt, Bookmark, AppSettings, SyncTombstone } from '../types';
 
 class MCQDatabase extends Dexie {
   tests!: Table<Test, number>;
@@ -7,6 +7,7 @@ class MCQDatabase extends Dexie {
   attempts!: Table<Attempt, number>;
   bookmarks!: Table<Bookmark, number>;
   settings!: Table<AppSettings, number>;
+  syncTombstones!: Table<SyncTombstone, number>;
 
   constructor() {
     super('MCQExamSystem');
@@ -17,6 +18,15 @@ class MCQDatabase extends Dexie {
       attempts: '++id, testId, startTime, status, mode',
       bookmarks: '++id, questionId, folder',
       settings: '++id',
+    });
+
+    this.version(2).stores({
+      tests: '++id, name, createdAt, updatedAt, userId',
+      questions: '++id, sourceTestId, difficulty, *tags, sectionName, updatedAt, userId',
+      attempts: '++id, testId, startTime, status, mode, updatedAt, userId',
+      bookmarks: '++id, questionId, folder, updatedAt, userId',
+      settings: '++id, updatedAt, userId',
+      syncTombstones: '++id, collectionName, recordId, deletedAt, userId',
     });
   }
 }
@@ -31,6 +41,7 @@ db.on('populate', () => {
     randomizeQuestions: false,
     randomizeOptions: false,
     showTimerWarnings: true,
+    updatedAt: new Date().toISOString(),
   });
 });
 

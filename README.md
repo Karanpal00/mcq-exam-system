@@ -13,6 +13,7 @@ Offline-first MCQ exam app built with Vite, React, TypeScript, Dexie/IndexedDB, 
 - Question bank with search, tags, difficulty editing, and filters.
 - Attempt history, result review, section analytics, weak areas, score trends, time analytics, and incorrect-question collection.
 - Backup/restore, per-test JSON/TXT export, PWA manifest, and service worker caching.
+- Optional Google login with Firebase Authentication and Firestore cloud sync.
 
 ## Question Format
 
@@ -42,6 +43,35 @@ npm install
 npm run dev
 ```
 
+## Firebase Setup
+
+The app works without Firebase in guest mode. To enable Google login and online save:
+
+1. Create a Firebase project.
+2. Add a Web app in Firebase project settings.
+3. Enable Authentication > Sign-in method > Google.
+4. Create a Firestore database.
+5. Copy `.env.example` to `.env.local` and fill the `VITE_FIREBASE_*` values.
+6. Add the same environment variables on Vercel or Render.
+
+Suggested Firestore rules for authenticated per-user data:
+
+```txt
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
+
+Cloud data is stored under `users/{uid}` with subcollections for `tests`, `questionBank`, `attempts`, `bookmarks`, `settings`, and sync tombstones. The app uses local IndexedDB first, then background-syncs to Firestore.
+
 ## Checks
 
 ```bash
@@ -66,4 +96,4 @@ The repo includes `render.yaml` for a static site.
 - Build command: `npm install && npm run build`
 - Publish directory: `dist`
 
-All app data is stored in the browser with IndexedDB, so no server database is required for Vercel or Render hosting.
+Without Firebase env vars, all app data is stored in the browser with IndexedDB. With Firebase configured, the same local data syncs online after Google sign-in.

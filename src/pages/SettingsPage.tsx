@@ -1,13 +1,18 @@
 import { useState, useRef } from 'react';
 import { useSettingsStore } from '../store/settingsStore';
+import { useCloudSyncStore } from '../store/cloudSyncStore';
 import { backupRepo } from '../db/repository';
 import { useToastStore } from '../components/Common/Toast';
-import { Sun, Moon, Monitor, Download, Upload, Trash2 } from 'lucide-react';
+import { Sun, Moon, Monitor, Download, Upload, Trash2, Cloud, LogOut, RefreshCw } from 'lucide-react';
 import Modal from '../components/Common/Modal';
 import db from '../db/database';
 
 export default function SettingsPage() {
   const { theme, setTheme } = useSettingsStore();
+  const {
+    user, status, error, lastSyncedAt, lastSummary, firebaseConfigured,
+    signInWithGoogle, signOutCloud, syncNow, resetCloudCopy,
+  } = useCloudSyncStore();
   const addToast = useToastStore(s => s.addToast);
   const fileRef = useRef<HTMLInputElement>(null);
   const [showClearModal, setShowClearModal] = useState(false);
@@ -60,6 +65,50 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Cloud Sync */}
+      <div className="card mb-2">
+        <div className="card-title mb-2 flex items-center gap-sm"><Cloud size={18} /> Account & Cloud Sync</div>
+        {!firebaseConfigured ? (
+          <div>
+            <p className="text-sm text-muted">Firebase is not configured yet. The app is running in guest mode and storing data only in this browser.</p>
+            <div className="form-hint mt-1">Add the `VITE_FIREBASE_*` environment variables from `.env.example` on Vercel/Render to enable Google login and Firestore sync.</div>
+          </div>
+        ) : user ? (
+          <div>
+            <div className="flex items-center justify-between mb-1" style={{ flexWrap: 'wrap' }}>
+              <div>
+                <div className="font-semibold">{user.displayName || 'Signed in user'}</div>
+                <div className="text-sm text-muted">{user.email}</div>
+              </div>
+              <span className={`sync-pill sync-${status}`}>{status}</span>
+            </div>
+            <div className="text-sm text-muted">
+              Last synced: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : 'Not yet'}
+              {lastSummary && ` • Pulled ${lastSummary.pulled}, pushed ${lastSummary.pushed}, deletes ${lastSummary.deleted}`}
+            </div>
+            {error && <div className="import-error mt-1">{error}</div>}
+            <div className="flex gap-sm mt-2" style={{ flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" onClick={syncNow} disabled={status === 'syncing'}>
+                <RefreshCw size={16} /> Sync Now
+              </button>
+              <button className="btn btn-ghost" onClick={resetCloudCopy} disabled={status === 'syncing'}>
+                Re-upload Local Data
+              </button>
+              <button className="btn btn-ghost" onClick={signOutCloud}>
+                <LogOut size={16} /> Sign Out
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm text-muted">Continue as guest or sign in with Google to migrate this browser’s local data to Firestore.</p>
+            <button className="btn btn-primary mt-1" onClick={signInWithGoogle}>
+              Sign in with Google
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Backup & Restore */}

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useSettingsStore } from './store/settingsStore';
+import { useCloudSyncStore } from './store/cloudSyncStore';
 import AppLayout from './components/Layout/AppLayout';
 import ToastContainer from './components/Common/Toast';
 import DashboardPage from './pages/DashboardPage';
@@ -19,10 +20,12 @@ import './index.css';
 
 export default function App() {
   const initTheme = useSettingsStore(s => s.initTheme);
+  const initCloudSync = useCloudSyncStore(s => s.initCloudSync);
 
   useEffect(() => {
     initTheme();
-  }, []);
+    initCloudSync();
+  }, [initTheme, initCloudSync]);
 
   return (
     <BrowserRouter>

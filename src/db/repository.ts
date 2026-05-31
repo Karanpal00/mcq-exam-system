@@ -1,5 +1,15 @@
 import db from './database';
-import type { Test, Question, Attempt, Bookmark, AppSettings, DashboardStats } from '../types';
+import type { Test, Question, Attempt, Bookmark, AppSettings, DashboardStats, CloudCollectionName } from '../types';
+import { requestCloudSync } from '../services/syncEvents';
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+async function recordTombstone(collectionName: CloudCollectionName, recordId: number) {
+  await db.syncTombstones.add({ collectionName, recordId, deletedAt: nowIso() });
+  requestCloudSync();
+}
 
 // ===== Test Repository =====
 export const testRepo = {
@@ -12,17 +22,24 @@ export const testRepo = {
   },
 
   async create(test: Omit<Test, 'id'>): Promise<number> {
-    return db.tests.add(test as Test);
+    const id = await db.tests.add(test as Test);
+    requestCloudSync();
+    return id;
   },
 
   async update(id: number, changes: Partial<Test>): Promise<void> {
-    await db.tests.update(id, { ...changes, updatedAt: new Date().toISOString() });
+    await db.tests.update(id, { ...changes, updatedAt: nowIso() });
+    requestCloudSync();
   },
 
   async delete(id: number): Promise<void> {
-    await db.transaction('rw', [db.tests, db.questions, db.attempts, db.bookmarks], async () => {
+    await db.transaction('rw', [db.tests, db.questions, db.attempts, db.bookmarks, db.syncTombstones], async () => {
       const questions = await db.questions.where('sourceTestId').equals(id).toArray();
       const questionIds = questions.map(q => q.id!);
+      const attempts = await db.attempts.where('testId').equals(id).toArray();
+      const bookmarks = questionIds.length
+        ? await db.bookmarks.where('questionId').anyOf(questionIds).toArray()
+        : [];
       
       // Delete related bookmarks
       await db.bookmarks.where('questionId').anyOf(questionIds).delete();
@@ -35,6 +52,13 @@ export const testRepo = {
       
       // Delete test
       await db.tests.delete(id);
+
+      await Promise.all([
+        recordTombstone('tests', id),
+        ...questionIds.map(qId => recordTombstone('questionBank', qId)),
+        ...attempts.map(a => recordTombstone('attempts', a.id!)),
+        ...bookmarks.map(b => recordTombstone('bookmarks', b.id!)),
+      ]);
     });
   },
 
@@ -66,16 +90,23 @@ export const questionRepo = {
 
   async bulkAdd(questions: Omit<Question, 'id'>[]): Promise<number[]> {
     const ids = await db.questions.bulkAdd(questions as Question[], { allKeys: true });
+    requestCloudSync();
     return ids as number[];
   },
 
   async update(id: number, changes: Partial<Question>): Promise<void> {
-    await db.questions.update(id, changes);
+    await db.questions.update(id, { ...changes, updatedAt: nowIso() });
+    requestCloudSync();
   },
 
   async delete(id: number): Promise<void> {
+    const bookmarks = await db.bookmarks.where('questionId').equals(id).toArray();
     await db.bookmarks.where('questionId').equals(id).delete();
     await db.questions.delete(id);
+    await Promise.all([
+      recordTombstone('questionBank', id),
+      ...bookmarks.map(b => recordTombstone('bookmarks', b.id!)),
+    ]);
   },
 
   async search(query: string): Promise<Question[]> {
@@ -129,15 +160,19 @@ export const attemptRepo = {
   },
 
   async create(attempt: Omit<Attempt, 'id'>): Promise<number> {
-    return db.attempts.add(attempt as Attempt);
+    const id = await db.attempts.add({ ...attempt, updatedAt: nowIso() } as Attempt);
+    requestCloudSync();
+    return id;
   },
 
   async update(id: number, changes: Partial<Attempt>): Promise<void> {
-    await db.attempts.update(id, changes);
+    await db.attempts.update(id, { ...changes, updatedAt: nowIso() });
+    requestCloudSync();
   },
 
   async delete(id: number): Promise<void> {
     await db.attempts.delete(id);
+    await recordTombstone('attempts', id);
   },
 
   async getInProgress(): Promise<Attempt | undefined> {
@@ -195,15 +230,21 @@ export const bookmarkRepo = {
       .filter(b => b.folder === bookmark.folder)
       .first();
     if (existing?.id) return existing.id;
-    return db.bookmarks.add(bookmark as Bookmark);
+    const id = await db.bookmarks.add({ ...bookmark, updatedAt: bookmark.createdAt } as Bookmark);
+    requestCloudSync();
+    return id;
   },
 
   async remove(questionId: number, folder?: string): Promise<void> {
+    const existing = folder
+      ? await db.bookmarks.where('questionId').equals(questionId).filter(b => b.folder === folder).toArray()
+      : await db.bookmarks.where('questionId').equals(questionId).toArray();
     if (folder) {
       await db.bookmarks.where({ questionId, folder }).delete();
     } else {
       await db.bookmarks.where('questionId').equals(questionId).delete();
     }
+    await Promise.all(existing.map(b => recordTombstone('bookmarks', b.id!)));
   },
 
   async isBookmarked(questionId: number): Promise<boolean> {
@@ -227,16 +268,18 @@ export const settingsRepo = {
       randomizeQuestions: false,
       randomizeOptions: false,
       showTimerWarnings: true,
+      updatedAt: nowIso(),
     };
   },
 
   async update(changes: Partial<AppSettings>): Promise<void> {
     const settings = await db.settings.toCollection().first();
     if (settings?.id) {
-      await db.settings.update(settings.id, changes);
+      await db.settings.update(settings.id, { ...changes, updatedAt: nowIso() });
     } else {
-      await db.settings.add(changes as AppSettings);
+      await db.settings.add({ ...changes, updatedAt: nowIso() } as AppSettings);
     }
+    requestCloudSync();
   },
 };
 
@@ -328,6 +371,7 @@ export const backupRepo = {
         if (data.data.settings?.length) await db.settings.bulkAdd(data.data.settings);
       });
 
+      requestCloudSync();
       return { success: true };
     } catch (e) {
       return { success: false, error: (e as Error).message };

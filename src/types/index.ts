@@ -2,6 +2,7 @@
 
 export interface Test {
   id?: number;
+  userId?: string;
   name: string;
   description: string;
   duration: number; // minutes
@@ -24,6 +25,7 @@ export interface Section {
 
 export interface Question {
   id?: number;
+  userId?: string;
   text: string;
   options: string[];
   correctAnswer: number; // index 0-3 (A=0, B=1, C=2, D=3)
@@ -33,10 +35,12 @@ export interface Question {
   sectionName?: string;
   sourceTestId?: number;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Attempt {
   id?: number;
+  userId?: string;
   testId: number;
   testName: string;
   mode: 'exam' | 'study' | 'practice' | 'smart-retake';
@@ -56,6 +60,7 @@ export interface Attempt {
   answers: Answer[];
   sectionOrder?: string[];
   questionOrder?: number[];
+  updatedAt?: string;
 }
 
 export interface Answer {
@@ -69,18 +74,38 @@ export interface Answer {
 
 export interface Bookmark {
   id?: number;
+  userId?: string;
   questionId: number;
   folder: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface AppSettings {
   id?: number;
+  userId?: string;
   theme: 'light' | 'dark' | 'system';
   fullScreenExam: boolean;
   randomizeQuestions: boolean;
   randomizeOptions: boolean;
   showTimerWarnings: boolean;
+  updatedAt?: string;
+}
+
+export interface SyncTombstone {
+  id?: number;
+  userId?: string;
+  collectionName: CloudCollectionName;
+  recordId: number;
+  deletedAt: string;
+}
+
+export type CloudCollectionName = 'tests' | 'questionBank' | 'attempts' | 'bookmarks' | 'settings';
+
+export interface CloudSyncSummary {
+  pulled: number;
+  pushed: number;
+  deleted: number;
 }
 
 // ===== Exam State =====
