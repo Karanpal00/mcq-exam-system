@@ -1,0 +1,16 @@
+{
+  "name": "MCQ Exam System",
+  "short_name": "MCQ Exam",
+  "description": "Offline-first MCQ exam practice, study, analytics, and backup.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f0f2f5",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

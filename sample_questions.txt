@@ -1,0 +1,110 @@
+[SECTION] Quantitative Aptitude
+
+Q: What is the ratio of 12 to 16?
+A. 3:4
+B. 4:3
+C. 2:3
+D. 3:2
+ANSWER: A
+
+Q: If A:B = 2:3 and B:C = 4:5, then A:B:C is?
+A. 8:12:15
+B. 2:3:5
+C. 4:6:5
+D. 8:12:10
+ANSWER: A
+
+Q: Two numbers are in the ratio 3:5. If each number is increased by 10, the ratio becomes 5:7. The numbers are?
+A. 15, 25
+B. 12, 20
+C. 9, 15
+D. 6, 10
+ANSWER: A
+
+Q: The ratio of incomes of two persons is 9:7 and the ratio of their expenditures is 4:3. If each of them saves Rs 2000, find the income of A?
+A. Rs 18000
+B. Rs 14000
+C. Rs 16000
+D. Rs 20000
+ANSWER: A
+
+Q: A and B together have Rs 1210. If 4/15 of A's amount is equal to 2/5 of B's amount, how much does B have?
+A. Rs 484
+B. Rs 460
+C. Rs 550
+D. Rs 726
+ANSWER: A
+
+[SECTION] Reasoning
+
+Q: In a certain code language, 'MOUSE' is written as 'PRXVH'. How is 'HOUSE' written in that code?
+A. KRXVH
+B. IRXVH
+C. LRXVH
+D. JRXVH
+ANSWER: A
+
+Q: Which number comes next in the series: 2, 6, 12, 20, 30, ?
+A. 42
+B. 40
+C. 38
+D. 36
+ANSWER: A
+
+Q: If 'PAPER' is coded as 'SDSHU', then 'PENCIL' is coded as?
+A. SHQFLO
+B. SHQFOL
+C. SHQFLN
+D. SGQFLO
+ANSWER: A
+
+Q: Find the odd one out: 3, 5, 11, 14, 17, 21
+A. 14
+B. 21
+C. 11
+D. 17
+ANSWER: A
+
+Q: Pointing to a photograph, a man said, "I have no brother or sister but that man's father is my father's son." Whose photograph was it?
+A. His son
+B. His father
+C. His nephew
+D. His own
+ANSWER: A
+
+[SECTION] English
+
+Q: Choose the synonym of 'Eloquent':
+A. Articulate
+B. Silent
+C. Confused
+D. Harsh
+ANSWER: A
+
+Q: Choose the antonym of 'Benevolent':
+A. Malevolent
+B. Kind
+C. Generous
+D. Charitable
+ANSWER: A
+
+Q: Fill in the blank: He has been living here _____ 2010.
+A. since
+B. for
+C. from
+D. by
+ANSWER: A
+
+Q: Identify the error: "Each of the boys have their own room."
+A. have → has
+B. their → his
+C. Each → Every
+D. Both A and B
+ANSWER: D
+
+Q: Choose the correctly spelled word:
+A. Accommodate
+B. Accomodate
+C. Acommodate
+D. Acomodate
+ANSWER: A
