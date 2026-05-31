@@ -107,12 +107,12 @@ export default function CreateTestPage() {
     try {
       const now = new Date().toISOString();
 
-      // Save questions to question bank first
       const savedQuestions = await questionRepo.bulkAdd(
         importResult.questions.map(q => ({
           text: q.text,
           options: q.options,
           correctAnswer: q.correctAnswer,
+          explanation: q.explanation,
           difficulty: 'medium' as const,
           tags: [q.sectionName],
           sectionName: q.sectionName,

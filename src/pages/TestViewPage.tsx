@@ -92,9 +92,9 @@ export default function TestViewPage() {
             {q.options.map((opt, oi) => (
               <div key={oi} className="text-xs" style={{
                 padding: '0.3rem 0.6rem', borderRadius: 4,
-                background: oi === q.correctAnswer ? 'var(--success-light)' : 'var(--bg-input)',
-                color: oi === q.correctAnswer ? 'var(--success)' : 'var(--text-secondary)',
-                fontWeight: oi === q.correctAnswer ? 600 : 400,
+                background: 'var(--bg-input)',
+                color: 'var(--text-secondary)',
+                fontWeight: 400,
               }}>
                 {optionLetters[oi]}. {opt}
               </div>

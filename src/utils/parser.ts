@@ -125,12 +125,28 @@ export function parseQuestionText(text: string): ImportResult {
 
       // Parse answer
       let correctAnswer = -1;
+      let explanation: string | undefined = undefined;
       if (i < lines.length) {
         const ansLine = lines[i].trim();
         const ansMatch = ansLine.match(/^ANSWER\s*:\s*([A-Da-d])/i);
         if (ansMatch) {
           correctAnswer = ansMatch[1].toUpperCase().charCodeAt(0) - 65; // A=0, B=1, C=2, D=3
           i++;
+
+          // Parse optional explanation
+          if (i < lines.length) {
+            const expMatch = lines[i].trim().match(/^EXPLANATION\s*:(.*)/i);
+            if (expMatch) {
+              explanation = expMatch[1].trim();
+              i++;
+              while (i < lines.length) {
+                const nl = lines[i].trim();
+                if (!nl || nl.match(/^Q[:.)]\s*/i) || nl.match(/^\[SECTION\]/i)) break;
+                explanation += (explanation ? ' ' : '') + nl;
+                i++;
+              }
+            }
+          }
         } else {
           errors.push({
             line: i + 1,
@@ -152,6 +168,7 @@ export function parseQuestionText(text: string): ImportResult {
           text: fullQuestionText,
           options,
           correctAnswer,
+          explanation,
           lineNumber: i - 4, // Approximate
         });
 
@@ -261,7 +278,7 @@ function unescapePdfLiteral(value: string): string {
  */
 export function exportToText(
   testName: string,
-  sections: { name: string; questions: { text: string; options: string[]; correctAnswer: number }[] }[]
+  sections: { name: string; questions: { text: string; options: string[]; correctAnswer: number; explanation?: string }[] }[]
 ): string {
   const optionLetters = ['A', 'B', 'C', 'D'];
   let output = `# ${testName}\n\n`;
@@ -275,7 +292,11 @@ export function exportToText(
       q.options.forEach((opt, idx) => {
         output += `${optionLetters[idx]}. ${opt}\n`;
       });
-      output += `ANSWER: ${optionLetters[q.correctAnswer]}\n\n`;
+      output += `ANSWER: ${optionLetters[q.correctAnswer]}\n`;
+      if (q.explanation) {
+        output += `EXPLANATION: ${q.explanation}\n`;
+      }
+      output += `\n`;
     }
   }
 

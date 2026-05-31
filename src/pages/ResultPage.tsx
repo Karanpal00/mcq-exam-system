@@ -198,6 +198,11 @@ export default function ResultPage() {
                         );
                       })}
                     </div>
+                    {question.explanation && (
+                      <div className="card mt-2" style={{ background: 'var(--info-light)', borderColor: 'var(--info)' }}>
+                        <div className="text-sm"><strong>Explanation:</strong> {question.explanation}</div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

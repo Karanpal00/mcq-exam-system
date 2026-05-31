@@ -145,6 +145,7 @@ export interface ParsedQuestion {
   text: string;
   options: string[];
   correctAnswer: number;
+  explanation?: string;
   lineNumber: number;
 }
 
