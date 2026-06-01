@@ -5,7 +5,7 @@ import { useToastStore } from '../components/Common/Toast';
 import { Search, Filter, Database, Save } from 'lucide-react';
 
 export default function QuestionBankPage() {
-  const { questions, tags, loading, refresh } = useQuestionBank();
+  const { questions, tags, loading } = useQuestionBank();
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('all');
   const [diffFilter, setDiffFilter] = useState('all');
@@ -71,7 +71,6 @@ export default function QuestionBankPage() {
               value={q.difficulty}
               onChange={async e => {
                 await questionRepo.update(q.id!, { difficulty: e.target.value as typeof q.difficulty });
-                refresh();
                 addToast('Difficulty updated', 'success');
               }}>
               <option value="easy">Easy</option>
@@ -103,7 +102,6 @@ export default function QuestionBankPage() {
               const raw = editingTags[q.id!] ?? q.tags.join(', ');
               const nextTags = raw.split(',').map(t => t.trim()).filter(Boolean);
               await questionRepo.update(q.id!, { tags: nextTags });
-              refresh();
               addToast('Tags updated', 'success');
             }}>
               <Save size={14} /> Save Tags

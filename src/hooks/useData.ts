@@ -1,98 +1,130 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import db from '../db/database';
 import type { Test, Question, Attempt, DashboardStats } from '../types';
-import { testRepo, questionRepo, attemptRepo, statsRepo } from '../db/repository';
 
 /**
- * Hook for dashboard data
+ * Hook for dashboard data — reactive via Dexie live queries.
+ * Automatically re-renders when IndexedDB data changes (e.g. after cloud sync).
  */
 export function useDashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [tests, setTests] = useState<Test[]>([]);
-  const [loading, setLoading] = useState(true);
+  const tests = useLiveQuery(
+    () => db.tests.orderBy('createdAt').reverse().toArray(),
+    [],
+    [] as Test[],
+  );
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    const [s, t] = await Promise.all([
-      statsRepo.getDashboardStats(),
-      testRepo.getAll(),
+  const stats = useLiveQuery(async (): Promise<DashboardStats> => {
+    const [totalTests, totalQuestions, attempts] = await Promise.all([
+      db.tests.count(),
+      db.questions.count(),
+      db.attempts.where('status').anyOf(['completed', 'auto-submitted', 'timed-out']).toArray(),
     ]);
-    setStats(s);
-    setTests(t);
-    setLoading(false);
-  }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+    const scores = attempts.map(a => a.percentage);
+    const bestScore = scores.length > 0 ? Math.max(...scores) : 0;
+    const averageScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
 
-  return { stats, tests, loading, refresh };
+    let streak = 0;
+    if (attempts.length > 0) {
+      const sorted = attempts.sort((a, b) =>
+        new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+      );
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const checkDate = new Date(today);
+      for (let i = 0; i < 365; i++) {
+        const dayStr = checkDate.toISOString().split('T')[0];
+        const hasAttempt = sorted.some(a => a.startTime.startsWith(dayStr));
+        if (hasAttempt) {
+          streak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else if (i === 0) {
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+    }
+
+    return {
+      totalTests,
+      totalQuestions,
+      totalAttempts: attempts.length,
+      bestScore: Math.round(bestScore * 100) / 100,
+      averageScore: Math.round(averageScore * 100) / 100,
+      currentStreak: streak,
+    };
+  }, [], null);
+
+  return { stats, tests, loading: stats === null };
 }
 
 /**
- * Hook for test data with attempts
+ * Hook for test data with attempts — reactive
  */
 export function useTestData(testId: number | undefined) {
-  const [test, setTest] = useState<Test | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [loading, setLoading] = useState(true);
+  const test = useLiveQuery(
+    () => (testId ? db.tests.get(testId) : undefined),
+    [testId],
+    undefined as Test | undefined,
+  );
 
-  const refresh = useCallback(async () => {
-    if (!testId) return;
-    setLoading(true);
-    const [t, q, a] = await Promise.all([
-      testRepo.getById(testId),
-      questionRepo.getByTestId(testId),
-      attemptRepo.getByTestId(testId),
-    ]);
-    setTest(t || null);
-    setQuestions(q);
-    setAttempts(a);
-    setLoading(false);
-  }, [testId]);
+  const questions = useLiveQuery(
+    () => (testId ? db.questions.where('sourceTestId').equals(testId).toArray() : []),
+    [testId],
+    [] as Question[],
+  );
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const attempts = useLiveQuery(
+    () =>
+      testId
+        ? db.attempts.where('testId').equals(testId).toArray()
+            .then(a => a.sort((x, y) => new Date(y.startTime).getTime() - new Date(x.startTime).getTime()))
+        : [],
+    [testId],
+    [] as Attempt[],
+  );
 
-  return { test, questions, attempts, loading, refresh };
+  // Consider "loading" until the test resolves on first mount
+  const loading = testId !== undefined && test === undefined && questions.length === 0;
+
+  return { test: test || null, questions, attempts, loading };
 }
 
 /**
- * Hook for question bank
+ * Hook for question bank — reactive
  */
 export function useQuestionBank() {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [tags, setTags] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const questions = useLiveQuery(
+    () => db.questions.toArray(),
+    [],
+    [] as Question[],
+  );
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    const [q, t] = await Promise.all([
-      questionRepo.getAll(),
-      questionRepo.getAllTags(),
-    ]);
-    setQuestions(q);
-    setTags(t);
-    setLoading(false);
-  }, []);
+  const tags = useLiveQuery(async () => {
+    const qs = await db.questions.toArray();
+    const tagSet = new Set<string>();
+    qs.forEach(q => q.tags.forEach(t => tagSet.add(t)));
+    return Array.from(tagSet).sort();
+  }, [], [] as string[]);
 
-  useEffect(() => { refresh(); }, [refresh]);
-
-  return { questions, tags, loading, refresh };
+  return { questions, tags, loading: false };
 }
 
 /**
- * Hook for attempt history
+ * Hook for attempt history — reactive
  */
 export function useAttemptHistory() {
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [loading, setLoading] = useState(true);
+  const attempts = useLiveQuery(
+    () =>
+      db.attempts
+        .orderBy('startTime')
+        .reverse()
+        .toArray()
+        .then(a => a.filter(att => att.status !== 'in-progress')),
+    [],
+    [] as Attempt[],
+  );
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    const a = await attemptRepo.getAll();
-    setAttempts(a.filter(att => att.status !== 'in-progress'));
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { refresh(); }, [refresh]);
-
-  return { attempts, loading, refresh };
+  return { attempts, loading: false };
 }

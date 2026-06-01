@@ -6,7 +6,7 @@ import { testRepo, questionRepo, attemptRepo } from '../db/repository';
 import { formatTime } from '../utils/analytics';
 import {
   ChevronLeft, ChevronRight, Flag, Bookmark, X, Send, Clock,
-  AlertTriangle, Maximize, Minimize
+  AlertTriangle, Maximize, Minimize, Grid3X3, ChevronUp, LogOut
 } from 'lucide-react';
 import Modal from '../components/Common/Modal';
 import { useToastStore } from '../components/Common/Toast';
@@ -25,16 +25,18 @@ export default function ExamPage() {
   const {
     examState, questions, test, startExam, resumeExam,
     selectAnswer, clearAnswer, toggleMark, toggleBookmark,
-    navigateToQuestion, submitExam, resetExam, recordTimeSpent
+    navigateToQuestion, submitExam, resetExam, recordTimeSpent, saveProgress
   } = useExamStore();
 
   const { remainingSeconds, showWarning5min, showWarning1min, isExpired } = useTimer();
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [showPalette] = useState(true);
+  const [showMobilePalette, setShowMobilePalette] = useState(false);
   const timeTrackRef = useRef<number>(Date.now());
   const timeoutSubmitRef = useRef(false);
+  const questionAreaRef = useRef<HTMLDivElement>(null);
 
   // Initialize exam
   useEffect(() => {
@@ -134,6 +136,9 @@ export default function ExamPage() {
   useEffect(() => {
     if (!isExpired || !examState || timeoutSubmitRef.current) return;
     timeoutSubmitRef.current = true;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => undefined);
+    }
     submitExam().then(result => {
       if (result) navigate(`/results/${result.id}`);
     });
@@ -141,11 +146,33 @@ export default function ExamPage() {
 
   const handleSubmit = async () => {
     setShowSubmitModal(false);
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {}
+    }
     const result = await submitExam();
     if (result) {
       navigate(`/results/${result.id}`);
     }
   };
+
+  // Automatic full screen when test starts (not in study mode)
+  useEffect(() => {
+    if (!loading && mode !== 'study' && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {
+        // Silently catch browser security blocks
+      });
+    }
+  }, [loading, mode]);
+
+
+  // Scroll to top of question area when navigating questions
+  useEffect(() => {
+    if (questionAreaRef.current) {
+      questionAreaRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [examState?.currentQuestionIndex]);
 
   const toggleFullScreen = () => {
     if (!document.fullscreenElement) {
@@ -187,6 +214,79 @@ export default function ExamPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [examState, showSubmitModal, selectAnswer, navigateToQuestion, toggleMark, toggleBookmark, clearAnswer]);
 
+  // Swipe detection for mobile navigation (whole main area)
+  useEffect(() => {
+    const el = document.querySelector('.exam-main');
+    if (!el || !examState) return;
+
+    let startX = 0;
+    let startY = 0;
+    let isSwiping = false;
+
+    const onTouchStart = (e: any) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      isSwiping = true;
+    };
+
+    const onTouchMove = (e: any) => {
+      if (!isSwiping) return;
+      const diffX = e.touches[0].clientX - startX;
+      const diffY = e.touches[0].clientY - startY;
+
+      // If moving horizontally, prevent vertical scroll and browser gestures
+      if (Math.abs(diffX) > 10 && Math.abs(diffX) > Math.abs(diffY)) {
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+
+    const onTouchEnd = (e: any) => {
+      if (!isSwiping) return;
+      isSwiping = false;
+      const diffX = e.changedTouches[0].clientX - startX;
+      const diffY = e.changedTouches[0].clientY - startY;
+
+      if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY) * 1.2) {
+        if (diffX > 50) {
+          // Swipe right -> Go to Prev
+          if (examState.currentQuestionIndex > 0) {
+            navigateToQuestion(examState.currentQuestionIndex - 1);
+          }
+        } else if (diffX < -50) {
+          // Swipe left -> Go to Next
+          if (examState.currentQuestionIndex < examState.answers.length - 1) {
+            navigateToQuestion(examState.currentQuestionIndex + 1);
+          }
+        }
+      }
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [examState?.currentQuestionIndex, examState?.answers.length, navigateToQuestion]);
+
+  const handleSaveExit = async () => {
+    await saveProgress();
+    setShowExitModal(false);
+    navigate('/');
+  };
+
+  const handleDiscardExit = async () => {
+    if (examState?.attemptId) {
+      await attemptRepo.delete(examState.attemptId);
+    }
+    resetExam();
+    setShowExitModal(false);
+    navigate('/');
+  };
+
   if (loading || !examState || !test || questions.length === 0) {
     return <div className="exam-layout"><div className="exam-main"><div className="empty-state"><h3>Loading exam...</h3></div></div></div>;
   }
@@ -217,35 +317,78 @@ export default function ExamPage() {
 
   const timerClass = showWarning1min ? 'danger' : showWarning5min ? 'warning' : '';
 
+  // Progress percentage
+  const progressPct = ((answered / totalQ) * 100).toFixed(0);
+
   return (
     <div className="exam-layout">
       <div className="exam-main">
         {/* Header */}
         <div className="exam-header">
-          <div>
-            <div className="font-bold">{test.name}</div>
-            <div className="text-xs text-muted">
-              {currentSection?.name || 'General'} • Question {currentIdx + 1}/{totalQ}
-              {mode === 'study' && <span className="badge badge-info" style={{ marginLeft: 8 }}>Study Mode</span>}
+          <div className="exam-header-left">
+            <div className="font-bold truncate">{test.name}</div>
+            <div className="text-xs text-muted truncate">
+              {currentSection?.name && <span className="desktop-only">{currentSection.name} • </span>}
+              Q {currentIdx + 1}/{totalQ}
+              {mode === 'study' && <span className="badge badge-info" style={{ marginLeft: 8 }}>Study</span>}
             </div>
           </div>
-          <div className="flex items-center gap-sm">
+          <div className="exam-header-right">
             {mode !== 'study' && (
               <div className={`exam-timer ${timerClass}`}>
                 <Clock size={16} style={{ verticalAlign: 'middle', marginRight: 4 }} />
                 {formatTime(remainingSeconds)}
               </div>
             )}
-            <button className="btn-icon" onClick={toggleFullScreen}>
+            {/* Mobile palette toggle */}
+            <button
+              className="btn-icon exam-palette-toggle"
+              onClick={() => setShowMobilePalette(!showMobilePalette)}
+              title="Question Palette"
+            >
+              <Grid3X3 size={18} />
+            </button>
+            <button className="btn-icon desktop-only" onClick={toggleFullScreen} title="Toggle Fullscreen">
               {isFullScreen ? <Minimize size={18} /> : <Maximize size={18} />}
+            </button>
+            <button className="btn btn-primary btn-sm flex items-center gap-sm" onClick={() => setShowSubmitModal(true)} title="Submit Exam">
+              <Send size={14} /> <span className="exam-btn-label">Submit</span>
+            </button>
+            <button className="btn btn-danger btn-sm flex items-center gap-sm" onClick={() => setShowExitModal(true)} title="Exit Exam">
+              <LogOut size={14} /> <span className="exam-btn-label">Exit</span>
             </button>
           </div>
         </div>
 
+        {/* Progress bar for mobile */}
+        <div className="exam-progress-bar">
+          <div className="exam-progress-fill" style={{ width: `${progressPct}%` }} />
+        </div>
+
         {/* Question Area */}
-        <div className="exam-question-area">
+        <div className="exam-question-area" ref={questionAreaRef}>
           <div className="exam-question-card">
-            <div className="exam-question-num">Question {currentIdx + 1}</div>
+            <div className="flex justify-between items-center mb-2" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+              <div className="exam-question-num">Question {currentIdx + 1}</div>
+              <div className="flex items-center gap-sm">
+                <button className={`btn btn-sm ${currentAnswer?.isMarked ? 'btn-warning' : 'btn-ghost'}`}
+                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                  onClick={() => toggleMark(currentIdx)} title="Mark for Review">
+                  <Flag size={14} /> <span style={{ marginLeft: '4px' }}>Mark</span>
+                </button>
+                <button className={`btn btn-sm ${currentAnswer?.isBookmarked ? 'btn-warning' : 'btn-ghost'}`}
+                  style={{ padding: '0.3rem', borderRadius: '50%' }}
+                  onClick={() => toggleBookmark(currentIdx)} title="Bookmark Question">
+                  <Bookmark size={14} />
+                </button>
+                <button className="btn btn-ghost btn-sm"
+                  style={{ padding: '0.3rem', borderRadius: '50%' }}
+                  onClick={() => clearAnswer(currentIdx)}
+                  disabled={currentAnswer?.selectedAnswer === null} title="Clear Selected Answer">
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
             <div className="exam-question-text">{currentQuestion?.text}</div>
 
             <div className="option-list">
@@ -283,79 +426,113 @@ export default function ExamPage() {
         </div>
 
         {/* Footer */}
-        <div className="exam-footer">
-          <div className="exam-footer-actions">
+        <div className="exam-footer mobile-only">
+          <div className="exam-footer-nav" style={{ width: '100%', justifyContent: 'space-between', display: 'flex', alignItems: 'center' }}>
             <button className="btn btn-ghost btn-sm" disabled={currentIdx === 0}
               onClick={() => navigateToQuestion(currentIdx - 1)}>
-              <ChevronLeft size={16} /> Previous
+              <ChevronLeft size={16} /> Prev
             </button>
+            <span className="exam-footer-counter">{currentIdx + 1} / {totalQ}</span>
             <button className="btn btn-ghost btn-sm" disabled={currentIdx === totalQ - 1}
               onClick={() => navigateToQuestion(currentIdx + 1)}>
               Next <ChevronRight size={16} />
             </button>
           </div>
-          <div className="exam-footer-actions">
-          <button className={`btn btn-sm ${currentAnswer?.isMarked ? 'btn-warning' : 'btn-ghost'}`}
-              onClick={() => toggleMark(currentIdx)}>
-              <Flag size={14} /> {currentAnswer?.isMarked ? 'Unmark' : 'Mark'}
-            </button>
-            <button className={`btn btn-sm ${currentAnswer?.isBookmarked ? 'btn-warning' : 'btn-ghost'}`}
-              onClick={() => toggleBookmark(currentIdx)}>
-              <Bookmark size={14} /> {currentAnswer?.isBookmarked ? 'Saved' : 'Bookmark'}
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => clearAnswer(currentIdx)}
-              disabled={currentAnswer?.selectedAnswer === null}>
-              <X size={14} /> Clear
-            </button>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowSubmitModal(true)}>
-              <Send size={14} /> Submit
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Question Palette Sidebar */}
-      {showPalette && (
-        <div className="exam-sidebar">
-          <div className="palette-header">Question Palette</div>
+      {/* Question Palette Sidebar — Desktop */}
+      <div className="exam-sidebar">
+        <div className="palette-header">Question Palette</div>
 
-          {test.sections.length > 1 && (
-            <div className="palette-sections">
-              {test.sections.map((sec, si) => (
-                <button key={sec.id}
-                  className={`palette-section-btn ${si === examState.currentSectionIndex ? 'active' : ''}`}
-                  onClick={() => {
-                    // Navigate to first question of this section
-                    const firstQId = sec.questionIds[0];
-                    const idx = examState.questionOrder.findIndex(qi => questions[qi]?.id === firstQId);
-                    if (idx >= 0) navigateToQuestion(idx);
-                  }}
-                >
-                  {sec.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="palette-grid">
-            {Array.from({ length: totalQ }, (_, i) => {
-              const status = getQuestionStatus(i);
-              return (
-                <button key={i}
-                  className={`palette-btn ${status} ${i === currentIdx ? 'current' : ''}`}
-                  onClick={() => navigateToQuestion(i)}
-                >
-                  {i + 1}
-                </button>
-              );
-            })}
+        {test.sections.length > 1 && (
+          <div className="palette-sections">
+            {test.sections.map((sec, si) => (
+              <button key={sec.id}
+                className={`palette-section-btn ${si === examState.currentSectionIndex ? 'active' : ''}`}
+                onClick={() => {
+                  const firstQId = sec.questionIds[0];
+                  const idx = examState.questionOrder.findIndex(qi => questions[qi]?.id === firstQId);
+                  if (idx >= 0) navigateToQuestion(idx);
+                }}
+              >
+                {sec.name}
+              </button>
+            ))}
           </div>
+        )}
 
-          <div className="palette-legend">
-            <div className="legend-item"><div className="legend-dot" style={{ background: 'var(--bg-input)' }} /> Not Visited</div>
-            <div className="legend-item"><div className="legend-dot" style={{ background: 'var(--danger-light)' }} /> Visited</div>
-            <div className="legend-item"><div className="legend-dot" style={{ background: 'var(--success)' }} /> Answered</div>
-            <div className="legend-item"><div className="legend-dot" style={{ background: 'var(--accent)' }} /> Marked</div>
+        <div className="palette-grid">
+          {Array.from({ length: totalQ }, (_, i) => {
+            const status = getQuestionStatus(i);
+            return (
+              <button key={i}
+                className={`palette-btn ${status} ${i === currentIdx ? 'current' : ''}`}
+                onClick={() => navigateToQuestion(i)}
+              >
+                {i + 1}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Desktop Navigation below Palette Grid */}
+        <div className="palette-navigation">
+          <button className="btn btn-ghost btn-sm" disabled={currentIdx === 0}
+            onClick={() => navigateToQuestion(currentIdx - 1)}>
+            <ChevronLeft size={16} /> Prev
+          </button>
+          <span className="palette-counter">{currentIdx + 1} / {totalQ}</span>
+          <button className="btn btn-ghost btn-sm" disabled={currentIdx === totalQ - 1}
+            onClick={() => navigateToQuestion(currentIdx + 1)}>
+            Next <ChevronRight size={16} />
+          </button>
+        </div>
+
+        <div className="palette-stats">
+          <div className="palette-stat-item"><span className="palette-stat-dot answered" /> {answered} Answered</div>
+          <div className="palette-stat-item"><span className="palette-stat-dot marked" /> {marked} Marked</div>
+          <div className="palette-stat-item"><span className="palette-stat-dot visited" /> {unanswered} Left</div>
+        </div>
+
+        <div className="palette-legend">
+          <div className="legend-item"><div className="legend-dot" style={{ background: 'var(--bg-input)' }} /> Not Visited</div>
+          <div className="legend-item"><div className="legend-dot" style={{ background: 'var(--danger-light)' }} /> Visited</div>
+          <div className="legend-item"><div className="legend-dot" style={{ background: 'var(--success)' }} /> Answered</div>
+          <div className="legend-item"><div className="legend-dot" style={{ background: 'var(--accent)' }} /> Marked</div>
+        </div>
+      </div>
+
+      {/* Mobile Question Palette Sheet */}
+      {showMobilePalette && (
+        <div className="exam-mobile-palette-overlay" onClick={() => setShowMobilePalette(false)}>
+          <div className="exam-mobile-palette" onClick={e => e.stopPropagation()}>
+            <div className="exam-mobile-palette-header">
+              <span className="font-bold">Question Palette</span>
+              <button className="btn-icon" onClick={() => setShowMobilePalette(false)}>
+                <ChevronUp size={18} />
+              </button>
+            </div>
+
+            <div className="palette-stats" style={{ borderTop: 'none' }}>
+              <div className="palette-stat-item"><span className="palette-stat-dot answered" /> {answered}</div>
+              <div className="palette-stat-item"><span className="palette-stat-dot marked" /> {marked}</div>
+              <div className="palette-stat-item"><span className="palette-stat-dot visited" /> {unanswered}</div>
+            </div>
+
+            <div className="palette-grid" style={{ maxHeight: '50vh' }}>
+              {Array.from({ length: totalQ }, (_, i) => {
+                const status = getQuestionStatus(i);
+                return (
+                  <button key={i}
+                    className={`palette-btn ${status} ${i === currentIdx ? 'current' : ''}`}
+                    onClick={() => { navigateToQuestion(i); setShowMobilePalette(false); }}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -386,7 +563,41 @@ export default function ExamPage() {
               <div><div className="stat-value" style={{ fontSize: '1.25rem' }}>{answered}</div><div className="stat-label">Answered</div></div>
             </div>
           </div>
+          {mode !== 'study' && (
+            <p className="text-sm text-muted mt-1">
+              Time remaining: <strong>{formatTime(remainingSeconds)}</strong>
+            </p>
+          )}
           <p className="text-sm text-muted mt-2">Are you sure you want to submit?</p>
+        </div>
+      </Modal>
+
+      {/* Exit Confirmation Modal */}
+      <Modal
+        open={showExitModal}
+        onClose={() => setShowExitModal(false)}
+        title="Exit Test?"
+        footer={
+          <>
+            <button className="btn btn-ghost" onClick={() => setShowExitModal(false)}>Cancel</button>
+            <button className="btn btn-danger" onClick={handleDiscardExit}>Discard & Exit</button>
+            <button className="btn btn-primary" onClick={handleSaveExit}>Save & Exit</button>
+          </>
+        }
+      >
+        <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+          <AlertTriangle size={48} style={{ color: 'var(--warning)', marginBottom: '1rem' }} />
+          <p className="font-semibold" style={{ fontSize: '1.1rem' }}>How would you like to exit?</p>
+          <div style={{ textAlign: 'left', marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-input)' }}>
+              <strong style={{ color: 'var(--primary)' }}>Save & Exit</strong>
+              <p className="text-xs text-muted mt-1">Saves your current progress. You can resume this exam later from the dashboard.</p>
+            </div>
+            <div style={{ padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-input)' }}>
+              <strong style={{ color: 'var(--danger)' }}>Discard & Exit</strong>
+              <p className="text-xs text-muted mt-1">Deletes this attempt completely. You will lose your answers for this attempt.</p>
+            </div>
+          </div>
         </div>
       </Modal>
     </div>

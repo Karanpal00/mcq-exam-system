@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import {
-  GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut,
-  type User,
+  GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect,
+  getRedirectResult, signOut, type User,
 } from 'firebase/auth';
 import { firebaseConfigured, getFirebaseAuth } from '../services/firebase';
 import { syncFirestoreUser, wipeCloudDataForUser, startRealtimeSync, stopRealtimeSync } from '../services/cloudSync';
@@ -60,6 +60,11 @@ export const useCloudSyncStore = create<CloudSyncStore>((set, get) => ({
       }
     });
 
+    // Handle redirect result (for mobile / popup-blocked fallback)
+    getRedirectResult(auth).catch(() => {
+      // Redirect result errors are non-fatal; user just stays logged out
+    });
+
     window.addEventListener('online', () => {
       const user = get().user;
       if (user) {
@@ -93,6 +98,24 @@ export const useCloudSyncStore = create<CloudSyncStore>((set, get) => ({
       set({ status: 'syncing', error: null });
       await signInWithPopup(auth, provider);
     } catch (err) {
+      const code = (err as { code?: string }).code;
+      // If popup was blocked, cancelled, or cross-origin issue → fall back to redirect
+      if (
+        code === 'auth/popup-blocked' ||
+        code === 'auth/popup-closed-by-user' ||
+        code === 'auth/cancelled-popup-request' ||
+        code === 'auth/unauthorized-domain' ||
+        code === 'auth/internal-error'
+      ) {
+        try {
+          await signInWithRedirect(auth, provider);
+          // Page will redirect; no further code runs
+          return;
+        } catch (redirectErr) {
+          set({ status: 'error', error: (redirectErr as Error).message });
+          return;
+        }
+      }
       set({ status: 'error', error: (err as Error).message });
     }
   },
