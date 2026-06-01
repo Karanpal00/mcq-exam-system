@@ -84,8 +84,8 @@ export default function QuestionBankPage() {
             {q.options.map((opt, oi) => (
               <div key={oi} className="text-xs" style={{
                 padding: '0.2rem 0.5rem', borderRadius: 4,
-                background: oi === q.correctAnswer ? 'var(--success-light)' : 'var(--bg-input)',
-                color: oi === q.correctAnswer ? 'var(--success)' : 'var(--text-secondary)',
+                background: 'var(--bg-input)',
+                color: 'var(--text-secondary)',
               }}>
                 {optionLetters[oi]}. {opt}
               </div>

@@ -88,7 +88,14 @@ export default function SettingsPage() {
               Last synced: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : 'Not yet'}
               {lastSummary && ` • Pulled ${lastSummary.pulled}, pushed ${lastSummary.pushed}, deletes ${lastSummary.deleted}`}
             </div>
-            {error && <div className="import-error mt-1">{error}</div>}
+            {error && (
+              <div className="import-error mt-1" style={{ flexDirection: 'column', gap: '0.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}>
+                  <Cloud size={14} /> Sync Error
+                </div>
+                <div style={{ fontSize: '0.82rem', lineHeight: '1.5' }}>{error}</div>
+              </div>
+            )}
             <div className="flex gap-sm mt-2" style={{ flexWrap: 'wrap' }}>
               <button className="btn btn-primary" onClick={syncNow} disabled={status === 'syncing'}>
                 <RefreshCw size={16} /> Sync Now

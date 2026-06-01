@@ -4,7 +4,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { firebaseConfigured, getFirebaseAuth } from '../services/firebase';
-import { syncFirestoreUser, wipeCloudDataForUser } from '../services/cloudSync';
+import { syncFirestoreUser, wipeCloudDataForUser, startRealtimeSync, stopRealtimeSync } from '../services/cloudSync';
 import { CLOUD_SYNC_EVENT } from '../services/syncEvents';
 import type { CloudSyncSummary } from '../types';
 
@@ -48,15 +48,31 @@ export const useCloudSyncStore = create<CloudSyncStore>((set, get) => ({
 
     onAuthStateChanged(auth, user => {
       set({ user, status: user ? navigator.onLine ? 'guest' : 'offline' : 'guest', error: null });
-      if (user) get().syncNow();
+      if (user) {
+        get().syncNow();
+        if (navigator.onLine) {
+          startRealtimeSync(user.uid, () => {
+             // Optional: trigger local re-render if needed, or depend on Dexie live queries
+          });
+        }
+      } else {
+        stopRealtimeSync();
+      }
     });
 
     window.addEventListener('online', () => {
-      if (get().user) get().syncNow();
+      const user = get().user;
+      if (user) {
+        get().syncNow();
+        startRealtimeSync(user.uid, () => {});
+      }
       else set({ status: 'guest' });
     });
     window.addEventListener('offline', () => {
-      if (get().user) set({ status: 'offline' });
+      if (get().user) {
+        set({ status: 'offline' });
+        stopRealtimeSync();
+      }
     });
     window.addEventListener(CLOUD_SYNC_EVENT, () => {
       if (!get().user || !navigator.onLine) return;
@@ -64,9 +80,7 @@ export const useCloudSyncStore = create<CloudSyncStore>((set, get) => ({
       pendingSync = window.setTimeout(() => get().syncNow(), 2500);
     });
 
-    window.setInterval(() => {
-      if (get().user && navigator.onLine) get().syncNow();
-    }, 60000);
+    // Remove the 60s polling since we have realtime sync now
   },
 
   signInWithGoogle: async () => {
@@ -87,6 +101,7 @@ export const useCloudSyncStore = create<CloudSyncStore>((set, get) => ({
     const auth = getFirebaseAuth();
     if (!auth) return;
     await signOut(auth);
+    stopRealtimeSync();
     set({ user: null, status: 'guest', error: null });
   },
 

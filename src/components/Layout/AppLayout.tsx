@@ -2,7 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useSettingsStore } from '../../store/settingsStore';
 import { Menu } from 'lucide-react';
-import CloudStatus from './CloudStatus';
+import ProfileWidget from './ProfileWidget';
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
@@ -34,7 +34,7 @@ export default function AppLayout() {
             </button>
             <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{title}</h2>
           </div>
-          <CloudStatus />
+          <ProfileWidget />
         </header>
         <main className="page-content">
           <Outlet />

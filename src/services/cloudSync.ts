@@ -1,7 +1,8 @@
 import {
   collection, deleteDoc, doc, getDocs, setDoc, writeBatch,
-  type DocumentData, type Firestore,
+  onSnapshot
 } from 'firebase/firestore';
+import type { Unsubscribe, DocumentData, Firestore } from 'firebase/firestore';
 import db from '../db/database';
 import type {
   AppSettings, Attempt, Bookmark, CloudCollectionName, CloudSyncSummary,
@@ -64,6 +65,71 @@ const COLLECTIONS: CollectionConfig<SyncRecord>[] = [
   },
 ];
 
+let syncUnsubscribers: Unsubscribe[] = [];
+
+export function stopRealtimeSync() {
+  syncUnsubscribers.forEach(unsub => unsub());
+  syncUnsubscribers = [];
+}
+
+export function startRealtimeSync(userId: string, onUpdate: () => void) {
+  const firestore = getFirebaseDb();
+  if (!firestore) return;
+
+  stopRealtimeSync();
+
+  for (const config of COLLECTIONS) {
+    const colRef = collection(firestore, 'users', userId, config.cloudName);
+    const unsub = onSnapshot(colRef, { includeMetadataChanges: true }, async (snapshot) => {
+      // Ignore local changes that haven't been pushed yet to prevent loop
+      if (snapshot.metadata.hasPendingWrites) return;
+
+      let hasChanges = false;
+      for (const change of snapshot.docChanges()) {
+        if (change.type === 'added' || change.type === 'modified') {
+          const remote = fromCloudRecord(change.doc.data());
+          if (!remote.id) continue;
+          const local = await config.getLocal(remote.id);
+          if (!local || getRecordStamp(remote) > getRecordStamp(local)) {
+            await config.putLocal(remote);
+            hasChanges = true;
+          }
+        } else if (change.type === 'removed') {
+          const remote = fromCloudRecord(change.doc.data());
+          if (remote.id) {
+            await config.deleteLocal(remote.id);
+            hasChanges = true;
+          }
+        }
+      }
+      if (hasChanges) onUpdate();
+    });
+    syncUnsubscribers.push(unsub);
+  }
+
+  // Listen to tombstones
+  const tombstoneRef = collection(firestore, 'users', userId, 'tombstones');
+  const unsubTombstones = onSnapshot(tombstoneRef, { includeMetadataChanges: true }, async (snapshot) => {
+    if (snapshot.metadata.hasPendingWrites) return;
+    let hasChanges = false;
+    for (const change of snapshot.docChanges()) {
+      if (change.type === 'added' || change.type === 'modified') {
+        const tombstone = change.doc.data() as SyncTombstone;
+        const config = COLLECTIONS.find(item => item.cloudName === tombstone.collectionName);
+        if (!config || !tombstone.recordId) continue;
+        const local = await config.getLocal(tombstone.recordId);
+        if (local && Date.parse(tombstone.deletedAt) >= getRecordStamp(local)) {
+          await config.deleteLocal(tombstone.recordId);
+          hasChanges = true;
+        }
+      }
+    }
+    if (hasChanges) onUpdate();
+  });
+  syncUnsubscribers.push(unsubTombstones);
+}
+
+
 export async function syncFirestoreUser(userId: string): Promise<CloudSyncSummary> {
   const firestore = getFirebaseDb();
   if (!firestore) throw new Error('Firebase is not configured');
@@ -72,24 +138,32 @@ export async function syncFirestoreUser(userId: string): Promise<CloudSyncSummar
   let pushed = 0;
   let deleted = 0;
 
-  await setDoc(doc(firestore, 'users', userId), {
-    userId,
-    lastSeenAt: new Date().toISOString(),
-  }, { merge: true });
-
-  const tombstoneDeletes = await applyRemoteTombstones(firestore, userId);
-  deleted += tombstoneDeletes;
-
-  for (const config of COLLECTIONS) {
-    pulled += await pullCollection(firestore, userId, config);
+  try {
+    await setDoc(doc(firestore, 'users', userId), {
+      userId,
+      lastSeenAt: new Date().toISOString(),
+    }, { merge: true });
+  } catch (err) {
+    throw toFriendlyError(err);
   }
 
-  for (const config of COLLECTIONS) {
-    pushed += await pushCollection(firestore, userId, config);
-  }
+  try {
+    const tombstoneDeletes = await applyRemoteTombstones(firestore, userId);
+    deleted += tombstoneDeletes;
 
-  const tombstonePushes = await pushTombstones(firestore, userId);
-  deleted += tombstonePushes;
+    for (const config of COLLECTIONS) {
+      pulled += await pullCollection(firestore, userId, config);
+    }
+
+    for (const config of COLLECTIONS) {
+      pushed += await pushCollection(firestore, userId, config);
+    }
+
+    const tombstonePushes = await pushTombstones(firestore, userId);
+    deleted += tombstonePushes;
+  } catch (err) {
+    throw toFriendlyError(err);
+  }
 
   return { pulled, pushed, deleted };
 }
@@ -251,6 +325,23 @@ function sanitizeForLocal<T>(value: T): T {
     ) as T;
   }
   return value;
+}
+
+function toFriendlyError(err: unknown): Error {
+  const msg = (err as Error)?.message || String(err);
+  if (msg.includes('permission') || msg.includes('PERMISSION_DENIED')) {
+    return new Error('Firestore permission denied. Please check that your Firestore security rules are deployed and allow access for your account.');
+  }
+  if (msg.includes('unavailable') || msg.includes('UNAVAILABLE')) {
+    return new Error('Firestore is temporarily unavailable. Please check your internet connection and try again.');
+  }
+  if (msg.includes('unauthenticated') || msg.includes('UNAUTHENTICATED')) {
+    return new Error('Your session has expired. Please sign out and sign back in.');
+  }
+  if (msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+    return new Error('Firestore quota exceeded. Please try again later or check your Firebase billing plan.');
+  }
+  return new Error(msg);
 }
 
 function chunkArray<T>(items: T[], size: number) {

@@ -369,9 +369,9 @@ export default function CreateTestPage() {
                     {q.options.map((opt, oi) => (
                       <div key={oi} className="text-xs" style={{
                         padding: '0.25rem 0.5rem', borderRadius: 4,
-                        background: oi === q.correctAnswer ? 'var(--success-light)' : 'var(--bg-input)',
-                        color: oi === q.correctAnswer ? 'var(--success)' : 'var(--text-secondary)',
-                        fontWeight: oi === q.correctAnswer ? 600 : 400,
+                        background: 'var(--bg-input)',
+                        color: 'var(--text-secondary)',
+                        fontWeight: 400,
                       }}>
                         {String.fromCharCode(65 + oi)}. {opt}
                       </div>
