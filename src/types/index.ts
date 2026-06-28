@@ -70,6 +70,7 @@ export interface Answer {
   isMarked: boolean;
   isBookmarked: boolean;
   isCorrect?: boolean;
+  isVisited?: boolean;
 }
 
 export interface Bookmark {

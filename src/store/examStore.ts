@@ -76,12 +76,13 @@ export const useExamStore = create<ExamStore>()(
         : new Date(now.getTime() + test.duration * 60 * 1000).toISOString();
 
       const bookmarkedIds = new Set((await bookmarkRepo.getAll()).map(b => b.questionId));
-      const answers: Answer[] = questions.map(q => ({
+      const answers: Answer[] = questions.map((q, idx) => ({
         questionId: q.id!,
         selectedAnswer: null,
         timeSpent: 0,
         isMarked: false,
         isBookmarked: bookmarkedIds.has(q.id!),
+        isVisited: idx === 0,
       }));
 
       // Create attempt record
@@ -229,7 +230,19 @@ export const useExamStore = create<ExamStore>()(
       const state = get().examState;
       if (!state) return;
 
-      const newState = { ...state, currentQuestionIndex: index };
+      const newAnswers = [...state.answers];
+      if (newAnswers[index] && !newAnswers[index].isVisited) {
+        newAnswers[index] = {
+          ...newAnswers[index],
+          isVisited: true,
+        };
+      }
+
+      const newState = {
+        ...state,
+        currentQuestionIndex: index,
+        answers: newAnswers,
+      };
       saveExamStateToLS(newState);
       set({ examState: newState });
     },

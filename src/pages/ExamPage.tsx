@@ -311,7 +311,7 @@ export default function ExamPage() {
     if (a.isMarked && a.selectedAnswer !== null) return 'marked';
     if (a.isMarked) return 'marked';
     if (a.selectedAnswer !== null) return 'answered';
-    if (idx <= currentIdx) return 'visited';
+    if (a.isVisited || idx === currentIdx) return 'visited';
     return 'not-visited';
   };
 
@@ -370,24 +370,6 @@ export default function ExamPage() {
           <div className="exam-question-card">
             <div className="flex justify-between items-center mb-2" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
               <div className="exam-question-num">Question {currentIdx + 1}</div>
-              <div className="flex items-center gap-sm">
-                <button className={`btn btn-sm ${currentAnswer?.isMarked ? 'btn-warning' : 'btn-ghost'}`}
-                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
-                  onClick={() => toggleMark(currentIdx)} title="Mark for Review">
-                  <Flag size={14} /> <span style={{ marginLeft: '4px' }}>Mark</span>
-                </button>
-                <button className={`btn btn-sm ${currentAnswer?.isBookmarked ? 'btn-warning' : 'btn-ghost'}`}
-                  style={{ padding: '0.3rem', borderRadius: '50%' }}
-                  onClick={() => toggleBookmark(currentIdx)} title="Bookmark Question">
-                  <Bookmark size={14} />
-                </button>
-                <button className="btn btn-ghost btn-sm"
-                  style={{ padding: '0.3rem', borderRadius: '50%' }}
-                  onClick={() => clearAnswer(currentIdx)}
-                  disabled={currentAnswer?.selectedAnswer === null} title="Clear Selected Answer">
-                  <X size={14} />
-                </button>
-              </div>
             </div>
             <div className="exam-question-text">{currentQuestion?.text}</div>
 
@@ -415,6 +397,26 @@ export default function ExamPage() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Question Actions (Mark, Bookmark, Clear) below Options List */}
+            <div className="flex gap-sm mt-2 justify-end items-center flex-wrap" style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <button className={`btn btn-sm ${currentAnswer?.isMarked ? 'btn-warning' : 'btn-ghost'}`}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                onClick={() => toggleMark(currentIdx)} title="Mark for Review">
+                <Flag size={14} /> <span style={{ marginLeft: '6px' }}>Mark</span>
+              </button>
+              <button className={`btn btn-sm ${currentAnswer?.isBookmarked ? 'btn-warning' : 'btn-ghost'}`}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                onClick={() => toggleBookmark(currentIdx)} title="Bookmark Question">
+                <Bookmark size={14} /> <span style={{ marginLeft: '6px' }}>Bookmark</span>
+              </button>
+              <button className="btn btn-ghost btn-sm"
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                onClick={() => clearAnswer(currentIdx)}
+                disabled={currentAnswer?.selectedAnswer === null} title="Clear Selected Answer">
+                <X size={14} /> <span style={{ marginLeft: '6px' }}>Clear</span>
+              </button>
             </div>
 
             {mode === 'study' && currentAnswer?.selectedAnswer !== null && currentQuestion?.explanation && (

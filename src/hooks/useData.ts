@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import db from '../db/database';
 import type { Test, Question, Attempt, DashboardStats } from '../types';
+import { calculateLoginStreak } from '../utils/loginStreak';
 
 /**
  * Hook for dashboard data — reactive via Dexie live queries.
@@ -25,25 +26,12 @@ export function useDashboard() {
     const averageScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
 
     let streak = 0;
-    if (attempts.length > 0) {
-      const sorted = attempts.sort((a, b) =>
-        new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-      );
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const checkDate = new Date(today);
-      for (let i = 0; i < 365; i++) {
-        const dayStr = checkDate.toISOString().split('T')[0];
-        const hasAttempt = sorted.some(a => a.startTime.startsWith(dayStr));
-        if (hasAttempt) {
-          streak++;
-          checkDate.setDate(checkDate.getDate() - 1);
-        } else if (i === 0) {
-          checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-          break;
-        }
-      }
+    try {
+      const datesJson = localStorage.getItem('login_streak_dates') || '[]';
+      const loginDates: string[] = JSON.parse(datesJson);
+      streak = calculateLoginStreak(loginDates);
+    } catch (e) {
+      console.error('Failed to calculate login streak:', e);
     }
 
     return {

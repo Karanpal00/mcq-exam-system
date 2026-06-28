@@ -5,6 +5,7 @@ import { useCloudSyncStore } from './store/cloudSyncStore';
 import AppLayout from './components/Layout/AppLayout';
 import ToastContainer from './components/Common/Toast';
 import DashboardPage from './pages/DashboardPage';
+import MyTestsPage from './pages/MyTestsPage';
 import CreateTestPage from './pages/CreateTestPage';
 import ExamPage from './pages/ExamPage';
 import ResultPage from './pages/ResultPage';
@@ -16,6 +17,7 @@ import SettingsPage from './pages/SettingsPage';
 import StudyModePage from './pages/StudyModePage';
 import BookmarksPage from './pages/BookmarksPage';
 import PracticeModePage from './pages/PracticeModePage';
+import { recordDailyLogin } from './utils/loginStreak';
 import './index.css';
 
 export default function App() {
@@ -25,6 +27,7 @@ export default function App() {
   useEffect(() => {
     initTheme();
     initCloudSync();
+    recordDailyLogin();
   }, [initTheme, initCloudSync]);
 
   return (
@@ -38,7 +41,7 @@ export default function App() {
         {/* All other pages use the sidebar layout */}
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
-          <Route path="/tests" element={<DashboardPage />} />
+          <Route path="/tests" element={<MyTestsPage />} />
           <Route path="/tests/create" element={<CreateTestPage />} />
           <Route path="/tests/:testId" element={<TestViewPage />} />
           <Route path="/tests/:testId/results" element={<HistoryPage />} />
